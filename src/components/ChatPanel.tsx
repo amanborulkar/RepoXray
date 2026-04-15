@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { ChatMessage } from '../types';
+import SyntaxHighlighter from 'react-syntax-highlighter';
 
 interface Props {
   messages: ChatMessage[];
