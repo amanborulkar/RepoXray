@@ -47,16 +47,12 @@ export default function DependencyGraph({ graphData, onNodeClick }: Props) {
     const nodes: GraphNode[] = filtered.nodes.map(n => ({ ...n }));
     const nodeById = new Map(nodes.map(n => [n.id, n]));
 
-   const links = filtered.links
-  .map(l => {
-    const source = nodeById.get(typeof l.source === 'string' ? l.source : (l.source as GraphNode).id);
-    const target = nodeById.get(typeof l.target === 'string' ? l.target : (l.target as GraphNode).id);
-
-    if (!source || !target) return null;
-
-    return { source, target };
-  })
-  .filter((l): l is { source: GraphNode; target: GraphNode } => l !== null);
+    const links = filtered.links
+      .map(l => ({
+        source: nodeById.get(typeof l.source === 'string' ? l.source : (l.source as GraphNode).id),
+        target: nodeById.get(typeof l.target === 'string' ? l.target : (l.target as GraphNode).id),
+      }))
+      .filter(l => l.source && l.target);
 
     const sim = d3.forceSimulation<GraphNode>(nodes)
       .force('link', d3.forceLink(links).id((d: any) => d.id).distance(80).strength(0.5))

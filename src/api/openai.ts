@@ -2,7 +2,7 @@
 
 import { RepoFile, ClaudeAnalysis, ChatMessage } from '../types';
 
-const BASE_URL = "https://repoxray-16ko.onrender.com";
+const BASE_URL = "http://localhost:4000";
 
 // ── Analyze Repo ─────────────────────────────────────────
 export async function analyzeRepo(

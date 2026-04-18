@@ -5,28 +5,18 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 
-// ================== INIT ==================
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// ================== MIDDLEWARE ==================
 app.use(cors());
 app.use(express.json());
 
-// ================== HEALTH ==================
-app.get("/", (req, res) => {
-  res.send("🚀 RepoXray Backend Running");
-});
+app.get("/", (req, res) => res.send("🚀 RepoXray Backend Running"));
+app.get("/api/health", (req, res) => res.json({ ok: true }));
 
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true });
-});
-
-// ================== GITHUB PROXY ==================
 app.get("/api/github/*", async (req, res) => {
   const path = req.params[0];
   const url = `https://api.github.com/${path}`;
-
   try {
     const response = await fetch(url);
     const data = await response.json();
@@ -49,50 +39,51 @@ app.post('/api/analyze', async (req, res) => {
     .join('\n\n');
 
   const userPrompt = `
-You are a senior software architect.
+You are a world-class senior software architect with 15+ years of experience.
 
-Analyze this repository deeply.
-
-STRICT RULES:
-- Return ONLY valid JSON
-- No markdown, no explanation
-- NEVER leave arrays empty
+Analyze this GitHub repository and give a thorough, expert analysis that will help developers understand it quickly.
 
 Repository: ${repoName}
 
 Files:
 ${fileBlock}
 
-Return EXACT JSON:
+STRICT RULES:
+- Return ONLY valid JSON, nothing else
+- No markdown fences, no explanations outside JSON
+- NEVER leave arrays empty
+- Be specific — mention actual file names and function names from the code above
+- Write summaries as if explaining to a smart junior developer
 
+Return EXACT JSON structure:
 {
-  "summary": "2-3 sentence explanation",
-  "techStack": ["tech1", "tech2"],
-  "architecture": "clear explanation",
-  "architectureKeywords": ["MVC"],
+  "summary": "2-3 sentence plain-English explanation of what this project does and why it exists",
+  "techStack": ["list of actual technologies, frameworks, libraries detected"],
+  "architecture": "Clear explanation of the architectural pattern (e.g. MVC, microservices, monolith) and how the major pieces connect",
+  "architectureKeywords": ["e.g. REST API", "React SPA", "Express middleware"],
 
   "entryPoints": [
-    { "file": "path", "reason": "why important", "priority": 1 }
+    { "file": "actual/path/from/files", "reason": "specific reason why this is the entry point", "priority": 1 }
   ],
 
   "criticalFiles": [
-    { "file": "path", "explanation": "why important", "keyPatterns": ["pattern"] }
+    { "file": "actual/path", "explanation": "what this file does and why it matters", "keyPatterns": ["actual patterns or functions used"] }
   ],
 
   "gotchas": [
-    { "title": "issue", "description": "problem", "severity": "low" }
+    { "title": "specific issue title", "description": "detailed explanation of the gotcha, what goes wrong and why", "severity": "low|medium|high" }
   ],
 
   "readingOrder": [
-    { "order": 1, "file": "path", "why": "reason", "timeEstimate": "5 min" }
+    { "order": 1, "file": "actual/path", "why": "specific reason to read this file at this order", "timeEstimate": "X min" }
   ]
 }
 
-MINIMUM:
-- entryPoints: 3
-- criticalFiles: 5
-- gotchas: 3
-- readingOrder: 5
+MINIMUMS:
+- entryPoints: at least 3 real files
+- criticalFiles: at least 5 real files
+- gotchas: at least 4 real gotchas
+- readingOrder: at least 6 files in logical reading sequence
 `;
 
   try {
@@ -103,69 +94,59 @@ MINIMUM:
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3-haiku",
+        model: "openai/gpt-4o",
         messages: [
-          { role: "system", content: "Return only JSON." },
+          {
+            role: "system",
+            content: "You are an expert software architect. Return ONLY valid JSON. No markdown fences. No preamble. Just the JSON object."
+          },
           { role: "user", content: userPrompt }
-        ]
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
       })
     });
 
     const data = await response.json();
-
     const raw = data.choices?.[0]?.message?.content || "{}";
     const clean = raw.replace(/```json|```/g, "").trim();
 
     let parsed;
-
-    try {
-      parsed = JSON.parse(clean);
-    } catch {
-      parsed = {};
-    }
+    try { parsed = JSON.parse(clean); }
+    catch { parsed = {}; }
 
     function ensureData(d) {
       if (!d || typeof d !== "object") d = {};
-
-      if (!d.summary) d.summary = "AI-generated summary unavailable.";
+      if (!d.summary) d.summary = "AI analysis unavailable.";
       if (!Array.isArray(d.techStack)) d.techStack = ["Unknown"];
       if (!d.architecture) d.architecture = "Architecture not available.";
       if (!Array.isArray(d.architectureKeywords)) d.architectureKeywords = ["General"];
-
       if (!Array.isArray(d.entryPoints) || d.entryPoints.length === 0) {
         d.entryPoints = [
-          { file: "index.js", reason: "Main entry", priority: 1 },
-          { file: "app.js", reason: "Core logic", priority: 2 },
-          { file: "server.js", reason: "Backend start", priority: 3 }
+          { file: "index.js", reason: "Main entry point", priority: 1 },
+          { file: "app.js", reason: "Application setup", priority: 2 },
+          { file: "server.js", reason: "Server initialization", priority: 3 }
         ];
       }
-
       if (!Array.isArray(d.criticalFiles) || d.criticalFiles.length === 0) {
         d.criticalFiles = [
-          { file: "main.js", explanation: "Core logic", keyPatterns: ["core"] },
-          { file: "routes.js", explanation: "Routing", keyPatterns: ["routing"] },
-          { file: "config.js", explanation: "Config", keyPatterns: ["config"] }
+          { file: "main.js", explanation: "Core application logic", keyPatterns: ["initialization"] }
         ];
       }
-
       if (!Array.isArray(d.gotchas) || d.gotchas.length === 0) {
         d.gotchas = [
-          { title: "Error handling", description: "Missing try/catch", severity: "medium" }
+          { title: "Missing error handling", description: "Several async functions lack proper error boundaries.", severity: "medium" }
         ];
       }
-
       if (!Array.isArray(d.readingOrder) || d.readingOrder.length === 0) {
         d.readingOrder = [
-          { order: 1, file: "index.js", why: "Start here", timeEstimate: "5 min" }
+          { order: 1, file: "index.js", why: "Start here to understand initialization", timeEstimate: "5 min" }
         ];
       }
-
       return d;
     }
 
-    parsed = ensureData(parsed);
-
-    res.json(parsed);
+    res.json(ensureData(parsed));
 
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -180,49 +161,77 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: 'question and context required' });
   }
 
-  const systemPrompt = `
-You are a friendly and highly skilled senior software engineer.
+  // Build a rich file context (top 15 most relevant files)
+  const fileContext = context.files
+    .slice(0, 15)
+    .map(f => `📄 ${f.path} (${f.lines} lines, ${f.language})`)
+    .join('\n');
 
-Your job is to help a developer understand a GitHub repository.
+  const criticalFilesContext = context.analysis.criticalFiles
+    ? context.analysis.criticalFiles.map(cf => `• ${cf.file}: ${cf.explanation}`).join('\n')
+    : '';
 
-Be:
-- Friendly 😊
-- Clear and simple
-- Helpful like a mentor
-- Not too long, not too short
+  const gotchasContext = context.analysis.gotchas
+    ? context.analysis.gotchas.map(g => `• [${g.severity.toUpperCase()}] ${g.title}: ${g.description}`).join('\n')
+    : '';
 
-Repository: ${context.repoName}
+  const systemPrompt = `You are RepoXray AI — the world's most knowledgeable and friendly codebase guide.
 
-Summary:
+You are like a brilliant senior engineer who has spent hours reading this exact repository and now sits beside the developer, ready to explain anything clearly, deeply, and conversationally.
+
+═══════════════════════════════════════════════
+REPOSITORY: ${context.repoName}
+═══════════════════════════════════════════════
+
+📋 SUMMARY:
 ${context.analysis.summary}
 
-Tech Stack:
-${context.analysis.techStack.join(', ')}
+🛠️ TECH STACK:
+${context.analysis.techStack.join(' · ')}
 
-Architecture:
+🏗️ ARCHITECTURE:
 ${context.analysis.architecture}
 
-Important Files:
-${context.files.slice(0, 10).map(f => `- ${f.path}`).join('\n')}
+📂 KEY FILES:
+${fileContext}
 
-RESPONSE STYLE:
-- Start with a short friendly sentence
-- Use bullet points for clarity
-- Mention file names when possible
-- Give simple examples if helpful
-- Avoid complex jargon
-- Keep answers clean and structured
+🔑 CRITICAL FILES:
+${criticalFilesContext}
 
-DO NOT:
-- Be robotic
-- Give unnecessary long paragraphs
-- Repeat same thing
-`;
+⚠️ GOTCHAS TO KNOW:
+${gotchasContext}
 
+═══════════════════════════════════════════════
+HOW TO RESPOND:
+═══════════════════════════════════════════════
+
+PERSONALITY:
+- Be warm, sharp, and direct — like a brilliant tech mentor
+- Never be robotic or generic — always be specific to THIS repo
+- Show genuine enthusiasm when explaining elegant code patterns
+- Use "we", "you'll notice", "the interesting thing here is..." naturally
+
+FORMAT:
+- Start with a 1-sentence direct answer to the question
+- Use structured markdown: headers, bullets, code blocks where helpful
+- Mention ACTUAL file names from this repo (e.g. \`src/components/Hero.tsx\`)
+- Give concrete examples from the actual codebase when possible
+- Code snippets should be in proper \`\`\`language blocks
+
+DEPTH:
+- For simple questions: 150-250 words, clear and punchy
+- For architecture/deep questions: 300-500 words, structured with headers
+- For advanced questions: go deep, don't shy away from complexity
+
+NEVER:
+- Give a generic answer that could apply to any codebase
+- Say "I don't have access to the full code" — you DO have the analysis above
+- Use filler phrases like "Great question!" or "Certainly!"
+- Repeat the question back to the user`;
 
   const messages = [
     { role: "system", content: systemPrompt },
-    ...history.slice(-5),
+    ...history.slice(-8).map(m => ({ role: m.role, content: m.content })),
     { role: "user", content: question }
   ];
 
@@ -234,14 +243,17 @@ DO NOT:
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3-haiku",
+        model: "openai/gpt-4o",
         messages,
-        stream: true
+        stream: true,
+        temperature: 0.6,
+        max_tokens: 1200,
       })
     });
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -259,7 +271,6 @@ DO NOT:
   }
 });
 
-// ================== START ==================
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🚀 RepoXray server at http://localhost:${PORT}`);
 });
