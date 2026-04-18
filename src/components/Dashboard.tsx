@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { motion } from 'framer-motion'; // ✅ ADD
+import React, { useMemo, useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { RepoInfo, RepoFile, ClaudeAnalysis, ChecklistItem } from '../types';
 import { calcComplexity, generateChecklist } from '../utils/helpers';
 import { buildDependencyGraph } from '../utils/graphBuilder';
@@ -14,20 +14,58 @@ import ChatPanel from './ChatPanel';
 import DependencyGraph from './DependencyGraph';
 import OnboardingChecklist from './OnboardingChecklist';
 import FileDrawer from './FileDrawer';
+import RepoStats from './RepoStats';
+import FileViewer from './FileViewer';
 
-type Tab = 'overview' | 'graph' | 'chat' | 'checklist';
+type Tab = 'overview' | 'graph' | 'chat' | 'checklist' | 'stats';
 
 interface Props {
   repoInfo: RepoInfo;
   files: RepoFile[];
   analysis: ClaudeAnalysis;
+  githubData?: any;
   onBack: () => void;
 }
 
-export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) {
+const BASE_URL = 'http://localhost:4000';
+
+export default function Dashboard({ repoInfo, files, analysis, githubData: initialGithubData, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('overview');
   const [drawerFile, setDrawer] = useState<RepoFile | null>(null);
+  const [viewerPath, setViewerPath] = useState<string | null>(null);
   const [checklist] = useState<ChecklistItem[]>(() => generateChecklist(repoInfo, analysis));
+
+  // githubData: use what came from analyze, OR fetch it independently on demand
+  const [githubData, setGithubData] = useState<any>(initialGithubData ?? null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState('');
+
+  // Auto-fetch stats when the Stats tab is opened and data isn't available yet
+  useEffect(() => {
+    if (tab !== 'stats' || githubData) return;
+
+    const fetchStats = async () => {
+      setStatsLoading(true);
+      setStatsError('');
+      try {
+        const res = await fetch(
+          `${BASE_URL}/api/github-stats/${repoInfo.owner}/${repoInfo.repo}`
+        );
+        const json = await res.json();
+        if (json.githubData) {
+          setGithubData(json.githubData);
+        } else {
+          setStatsError(json.error || 'No data returned from server');
+        }
+      } catch (err: any) {
+        setStatsError(err.message || 'Could not reach backend');
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [tab, githubData, repoInfo.owner, repoInfo.repo]);
 
   const complexity = useMemo(() => {
     const avgLines = files.length ? files.reduce((s, f) => s + f.lines, 0) / files.length : 0;
@@ -39,7 +77,11 @@ export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) 
 
   const openFile = (path: string) => {
     const found = files.find(f => f.path === path || f.path.includes(path));
-    if (found) setDrawer(found);
+    if (found) {
+      setDrawer(found);
+    } else {
+      setViewerPath(path);
+    }
   };
 
   const askAboutFile = (file: RepoFile) => {
@@ -51,10 +93,11 @@ export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) 
   };
 
   const TABS = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'graph', label: 'Graph' },
-    { key: 'chat', label: 'Q&A Chat' },
-    { key: 'checklist', label: 'Checklist' },
+    { key: 'overview',  label: '📋 Overview'  },
+    { key: 'graph',     label: '🕸️ Graph'      },
+    { key: 'chat',      label: '💬 Q&A Chat'   },
+    { key: 'checklist', label: '✅ Checklist'  },
+    { key: 'stats',     label: '📊 Repo Stats' },
   ] as { key: Tab; label: string }[];
 
   return (
@@ -67,27 +110,33 @@ export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) 
       <TopBar repoInfo={repoInfo} analysis={analysis} files={files} onBack={onBack} />
 
       <div style={{ flex: 1, maxWidth: 1400, margin: '0 auto', width: '100%', padding: '28px 24px' }}>
-        
-        {/* ✨ Stats Animation */}
+
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
           <StatCards repoInfo={repoInfo} files={files} analysis={analysis} complexity={complexity} />
         </motion.div>
 
-        {/* 💎 Tabs */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 22 }}>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
           {TABS.map(t => (
             <motion.button
               key={t.key}
-              whileHover={{ scale: 1.1 }}
+              whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setTab(t.key)}
               style={{
-                padding: '8px 14px',
+                padding: '8px 16px',
                 borderRadius: 10,
-                background: tab === t.key ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
+                background: tab === t.key
+                  ? 'linear-gradient(135deg, var(--brand), var(--accent2))'
+                  : 'rgba(255,255,255,0.07)',
+                border: tab === t.key ? '1px solid transparent' : '1px solid rgba(255,255,255,0.12)',
                 cursor: 'pointer',
-                color: 'white'
+                color: tab === t.key ? 'white' : 'var(--muted2)',
+                fontSize: 13,
+                fontWeight: tab === t.key ? 600 : 400,
+                fontFamily: "'Geist', sans-serif",
+                boxShadow: tab === t.key ? '0 0 18px rgba(16,185,129,0.25)' : 'none',
+                transition: 'all 0.2s',
               }}
             >
               {t.label}
@@ -95,15 +144,13 @@ export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) 
           ))}
         </div>
 
-        {/* ✨ CONTENT SWITCH */}
+        {/* Content */}
         <motion.div
           key={tab}
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.28 }}
         >
-
-          {/* ── Overview ── */}
           {tab === 'overview' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -111,7 +158,6 @@ export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) 
                 <EntryPointsList analysis={analysis} onFileClick={openFile} />
                 <GotchasList analysis={analysis} />
               </div>
-
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <ArchitecturePanel analysis={analysis} />
                 <CriticalFilesPanel analysis={analysis} onFileClick={openFile} />
@@ -120,12 +166,10 @@ export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) 
             </div>
           )}
 
-          {/* ── Graph ── */}
           {tab === 'graph' && (
             <DependencyGraph graphData={graphData} onNodeClick={openFile} />
           )}
 
-          {/* ── Chat ── */}
           {tab === 'chat' && (
             <motion.div
               className="card"
@@ -136,7 +180,7 @@ export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) 
                 overflow: 'hidden',
                 backdropFilter: 'blur(10px)',
                 background: 'rgba(255,255,255,0.05)',
-                borderRadius: 16
+                borderRadius: 16,
               }}
             >
               <ChatPanel
@@ -152,14 +196,60 @@ export default function Dashboard({ repoInfo, files, analysis, onBack }: Props) 
             </motion.div>
           )}
 
-          {/* ── Checklist ── */}
           {tab === 'checklist' && (
             <OnboardingChecklist items={checklist} />
+          )}
+
+          {/* ── Repo Stats tab ── */}
+          {tab === 'stats' && (
+            statsLoading ? (
+              /* Loading shimmer */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {[1,2,3].map(i => (
+                  <div key={i} className="card skeleton" style={{ height: 100, borderRadius: 14 }} />
+                ))}
+                <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>
+                  Fetching GitHub stats…
+                </div>
+              </div>
+            ) : statsError ? (
+              /* Error state with retry */
+              <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--red-l)', marginBottom: 8 }}>
+                  Could not load GitHub Stats
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+                  {statsError}
+                </div>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => { setStatsError(''); setGithubData(null); }}
+                >
+                  🔄 Retry
+                </button>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 16 }}>
+                  Make sure the backend is running at <code>localhost:4000</code> and
+                  add <code>GITHUB_TOKEN</code> to <code>backend/.env</code> to avoid rate limits.
+                </div>
+              </div>
+            ) : githubData ? (
+              <RepoStats data={githubData} />
+            ) : null
           )}
         </motion.div>
       </div>
 
       <FileDrawer file={drawerFile} onClose={() => setDrawer(null)} onAskAbout={askAboutFile} />
+
+      {viewerPath && (
+        <FileViewer
+          owner={repoInfo.owner}
+          repo={repoInfo.repo}
+          path={viewerPath}
+          onClose={() => setViewerPath(null)}
+        />
+      )}
     </motion.div>
   );
 }

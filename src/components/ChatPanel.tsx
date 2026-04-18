@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import TypingIndicator from './TypingIndicator';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -418,7 +419,11 @@ export default function ChatPanel({ messages, streaming, streamingText, error, o
           ) : (
             <div key="messages">
               {messages.map(m => <Bubble key={m.id} msg={m} />)}
-              {streaming && <StreamingBubble text={streamingText} />}
+              {streaming && (
+                streamingText
+                  ? <StreamingBubble text={streamingText} />
+                  : <TypingIndicator />
+              )}
             </div>
           )}
         </AnimatePresence>

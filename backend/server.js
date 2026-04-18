@@ -4,6 +4,7 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import { fetchGitHubData } from "./githubData.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -26,6 +27,21 @@ app.get("/api/github/*", async (req, res) => {
   }
 });
 
+// ================== DEDICATED GITHUB STATS ENDPOINT ==================
+// Frontend can call this independently: GET /api/github-stats/owner/repo
+app.get("/api/github-stats/:owner/:repo", async (req, res) => {
+  const { owner, repo } = req.params;
+  try {
+    console.log(`📊 Fetching GitHub stats for ${owner}/${repo}`);
+    const githubData = await fetchGitHubData(owner, repo);
+    console.log(`✅ GitHub stats OK for ${owner}/${repo}`);
+    res.json({ githubData });
+  } catch (err) {
+    console.error(`❌ GitHub stats failed for ${owner}/${repo}:`, err.message);
+    res.status(500).json({ error: err.message, githubData: null });
+  }
+});
+
 // ================== AI ANALYZE ==================
 app.post('/api/analyze', async (req, res) => {
   const { repoName, files } = req.body;
@@ -33,6 +49,13 @@ app.post('/api/analyze', async (req, res) => {
   if (!repoName || !Array.isArray(files)) {
     return res.status(400).json({ error: 'repoName and files required' });
   }
+
+  // Parse owner/repo
+  const parts = repoName.trim().split('/');
+  const owner = parts[0] || '';
+  const repo  = parts[1] || '';
+
+  console.log(`🔍 Analyzing ${repoName} (owner="${owner}" repo="${repo}")`);
 
   const fileBlock = files
     .map(f => `FILE: ${f.path}\n${f.content}`)
@@ -86,28 +109,41 @@ MINIMUMS:
 - readingOrder: at least 6 files in logical reading sequence
 `;
 
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert software architect. Return ONLY valid JSON. No markdown fences. No preamble. Just the JSON object."
-          },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 4000,
-      })
-    });
+  // ── Run AI analysis AND GitHub stats fetch IN PARALLEL ──
+  const aiPromise = fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "openai/gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert software architect. Return ONLY valid JSON. No markdown fences. No preamble. Just the JSON object."
+        },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000,
+    })
+  });
 
-    const data = await response.json();
+  const githubPromise = (owner && repo)
+    ? fetchGitHubData(owner, repo).catch(err => {
+        console.error("⚠️ GitHub stats fetch failed (non-fatal):", err.message);
+        return null;
+      })
+    : Promise.resolve(null);
+
+  try {
+    // Both run at the same time — AI is slow, GitHub is fast
+    const [aiResponse, githubData] = await Promise.all([aiPromise, githubPromise]);
+
+    console.log(`✅ GitHub stats: ${githubData ? 'OK' : 'null'}`);
+
+    const data = await aiResponse.json();
     const raw = data.choices?.[0]?.message?.content || "{}";
     const clean = raw.replace(/```json|```/g, "").trim();
 
@@ -146,9 +182,10 @@ MINIMUMS:
       return d;
     }
 
-    res.json(ensureData(parsed));
+    res.json({ ...ensureData(parsed), githubData });
 
   } catch (err) {
+    console.error("❌ /api/analyze error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -161,7 +198,6 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: 'question and context required' });
   }
 
-  // Build a rich file context (top 15 most relevant files)
   const fileContext = context.files
     .slice(0, 15)
     .map(f => `📄 ${f.path} (${f.lines} lines, ${f.language})`)

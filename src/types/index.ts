@@ -108,6 +108,7 @@ export interface AppState {
   repoInfo: RepoInfo | null;
   files: RepoFile[];
   analysis: ClaudeAnalysis | null;
+  githubData: any | null;
   error: string | null;
   loadingStep: string;
   loadingProgress: number;

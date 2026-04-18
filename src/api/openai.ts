@@ -8,7 +8,7 @@ const BASE_URL = "http://localhost:4000";
 export async function analyzeRepo(
   repoName: string,
   files: RepoFile[]
-): Promise<ClaudeAnalysis> {
+): Promise<{ analysis: ClaudeAnalysis; githubData: any | null }> {
 
   const res = await fetch(`${BASE_URL}/api/analyze`, {
     method: 'POST',
@@ -23,7 +23,9 @@ export async function analyzeRepo(
     throw new Error(err.error || `Server error ${res.status}`);
   }
 
-  return res.json();
+  const data = await res.json();
+  const { githubData, ...analysis } = data;
+  return { analysis: analysis as ClaudeAnalysis, githubData: githubData ?? null };
 }
 
 // ── Chat with streaming ──────────────────────────────────

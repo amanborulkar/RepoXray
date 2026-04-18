@@ -71,6 +71,7 @@ export default function App() {
             repoInfo={state.repoInfo}
             files={state.files}
             analysis={state.analysis}
+            githubData={state.githubData}
             onBack={reset}
           />
         </motion.div>

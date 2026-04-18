@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { RepoInfo, ClaudeAnalysis, RepoFile } from '../types';
 import { exportToMarkdown, buildShareUrl } from '../utils/helpers';
+import ThemeToggle from './ThemeToggle';
 
 interface Props {
   repoInfo: RepoInfo;
@@ -58,7 +59,8 @@ export default function TopBar({ repoInfo, analysis, files, onBack }: Props) {
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <ThemeToggle />
         <button className="btn btn-ghost btn-sm" onClick={copy}>
           {copied
             ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Copied!</>

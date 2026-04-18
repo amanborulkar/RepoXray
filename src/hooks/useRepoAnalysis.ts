@@ -9,7 +9,7 @@ import { cache, classifyError, withRetry } from '../utils/helpers';
 type Action =
   | { type: 'SET_PHASE'; phase: AppPhase }
   | { type: 'SET_LOADING'; step: string; progress: number }
-  | { type: 'SET_SUCCESS'; repoInfo: RepoInfo; files: RepoFile[]; analysis: ClaudeAnalysis }
+  | { type: 'SET_SUCCESS'; repoInfo: RepoInfo; files: RepoFile[]; analysis: ClaudeAnalysis; githubData: any | null }
   | { type: 'SET_ERROR'; error: string }
   | { type: 'RESET' };
 
@@ -19,6 +19,7 @@ const INITIAL: AppState = {
   repoInfo: null,
   files: [],
   analysis: null,
+  githubData: null,
   error: null,
   loadingStep: '',
   loadingProgress: 0,
@@ -45,6 +46,7 @@ function reducer(state: AppState, action: Action): AppState {
         repoInfo: action.repoInfo,
         files: action.files,
         analysis: action.analysis,
+        githubData: action.githubData ?? null,
         error: null,
       };
 
@@ -103,6 +105,7 @@ export function useRepoAnalysis() {
         repoInfo: RepoInfo;
         files: RepoFile[];
         analysis: ClaudeAnalysis;
+        githubData: any | null;
       }>(owner, repo);
 
       if (cached) {
@@ -176,7 +179,7 @@ export function useRepoAnalysis() {
         progress: 70,
       });
 
-      const analysis = await analyzeRepo(`${owner}/${repo}`, files);
+      const { analysis, githubData } = await analyzeRepo(`${owner}/${repo}`, files);
 
       dispatch({
         type: 'SET_LOADING',
@@ -187,7 +190,7 @@ export function useRepoAnalysis() {
       await new Promise(r => setTimeout(r, 300));
 
       // ===== Cache Save =====
-      cache.save(owner, repo, { repoInfo, files, analysis });
+      cache.save(owner, repo, { repoInfo, files, analysis, githubData });
 
       // ===== Success =====
       dispatch({
@@ -195,6 +198,7 @@ export function useRepoAnalysis() {
         repoInfo,
         files,
         analysis,
+        githubData,
       });
 
     } catch (err) {
