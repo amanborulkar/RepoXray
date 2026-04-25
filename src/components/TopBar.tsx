@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { RepoInfo, ClaudeAnalysis, RepoFile } from '../types';
 import { exportToMarkdown, buildShareUrl } from '../utils/helpers';
 import ThemeToggle from './ThemeToggle';
@@ -10,13 +10,29 @@ interface Props {
   onBack: () => void;
 }
 
+// Particle mode context — App.tsx exposes this via window for TopBar access
+declare global { interface Window { __particleSetMode?: (m: string) => void; } }
+
+const PARTICLE_MODES = [
+  { id: 'neural', label: '⬡ Neural', title: 'Neural network mode' },
+  { id: 'galaxy', label: '✦ Galaxy', title: 'Galaxy spiral mode' },
+  { id: 'flow',   label: '〰 Flow',  title: 'Fluid flow mode'   },
+];
+
 export default function TopBar({ repoInfo, analysis, files, onBack }: Props) {
   const [copied, setCopied] = useState(false);
+  const [particleMode, setParticleMode] = useState('neural');
 
   const copy = async () => {
     await navigator.clipboard.writeText(buildShareUrl(repoInfo.owner, repoInfo.repo));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const switchParticle = (mode: string) => {
+    setParticleMode(mode);
+    // Communicate to App-level hook via custom event
+    window.dispatchEvent(new CustomEvent('particle-mode', { detail: mode }));
   };
 
   return (
@@ -59,20 +75,42 @@ export default function TopBar({ repoInfo, analysis, files, onBack }: Props) {
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        {/* Particle Mode Switcher */}
+        <div style={{ display: 'flex', gap: 3, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '3px', border: '1px solid rgba(255,255,255,0.08)' }}>
+          {PARTICLE_MODES.map(m => (
+            <button
+              key={m.id}
+              title={m.title}
+              onClick={() => switchParticle(m.id)}
+              style={{
+                padding: '3px 9px', borderRadius: 6, fontSize: 10, cursor: 'pointer', border: 'none',
+                background: particleMode === m.id ? 'rgba(16,185,129,0.15)' : 'transparent',
+                color: particleMode === m.id ? '#34d399' : 'var(--muted)',
+                fontFamily: 'Geist Mono, monospace',
+                transition: 'all 0.18s',
+                boxShadow: particleMode === m.id ? '0 0 8px rgba(16,185,129,0.2)' : 'none',
+              }}
+            >{m.label}</button>
+          ))}
+        </div>
+
         <ThemeToggle />
+
         <button className="btn btn-ghost btn-sm" onClick={copy}>
           {copied
             ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Copied!</>
             : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share</>
           }
         </button>
+
         <button className="btn btn-ghost btn-sm" onClick={() => exportToMarkdown(repoInfo, analysis, files)}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
           Export
         </button>
+
         <a href={`https://github.com/${repoInfo.fullName}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>

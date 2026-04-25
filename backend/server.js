@@ -9,26 +9,29 @@ import { fetchGitHubData } from "./githubData.js";
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// ── Increase payload limit for large repos ──
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 app.get("/", (req, res) => res.send("🚀 RepoXray Backend Running"));
-app.get("/api/health", (req, res) => res.json({ ok: true }));
+app.get("/api/health", (req, res) => res.json({ ok: true, model: "openai/gpt-4o", timestamp: new Date().toISOString() }));
 
+// ── GitHub proxy ──
 app.get("/api/github/*", async (req, res) => {
   const path = req.params[0];
   const url = `https://api.github.com/${path}`;
   try {
-    const response = await fetch(url);
+    const headers = { "Accept": "application/vnd.github.v3+json", "User-Agent": "RepoXray/1.0" };
+    if (process.env.GITHUB_TOKEN) headers["Authorization"] = `token ${process.env.GITHUB_TOKEN}`;
+    const response = await fetch(url, { headers });
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: "GitHub fetch failed" });
+    res.status(500).json({ error: "GitHub fetch failed", details: err.message });
   }
 });
 
-// ================== DEDICATED GITHUB STATS ENDPOINT ==================
-// Frontend can call this independently: GET /api/github-stats/owner/repo
+// ── GitHub Stats endpoint ──
 app.get("/api/github-stats/:owner/:repo", async (req, res) => {
   const { owner, repo } = req.params;
   try {
@@ -42,29 +45,89 @@ app.get("/api/github-stats/:owner/:repo", async (req, res) => {
   }
 });
 
-// ================== AI ANALYZE ==================
-app.post('/api/analyze', async (req, res) => {
-  const { repoName, files } = req.body;
+// ================== AI HELPERS ==================
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+const MODEL = "openai/gpt-4o";
 
-  if (!repoName || !Array.isArray(files)) {
-    return res.status(400).json({ error: 'repoName and files required' });
+function checkAPIKey(res) {
+  if (!OPENROUTER_KEY) {
+    console.error("❌ OPENROUTER_API_KEY is not set in backend/.env");
+    res.status(500).json({
+      error: "AI API key not configured. Add OPENROUTER_API_KEY to backend/.env"
+    });
+    return false;
+  }
+  return true;
+}
+
+async function callOpenRouter(messages, opts = {}) {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${OPENROUTER_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "http://localhost:5173",
+      "X-Title": "RepoXray",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      ...opts,
+      messages,
+    }),
+  });
+
+  if (!response.ok) {
+    const errBody = await response.json().catch(() => ({}));
+    const msg = errBody?.error?.message || errBody?.message || `OpenRouter ${response.status}`;
+    throw new Error(msg);
   }
 
-  // Parse owner/repo
-  const parts = repoName.trim().split('/');
-  const owner = parts[0] || '';
-  const repo  = parts[1] || '';
+  return response;
+}
 
-  console.log(`🔍 Analyzing ${repoName} (owner="${owner}" repo="${repo}")`);
+function ensureAnalysis(d) {
+  if (!d || typeof d !== "object") d = {};
+  if (!d.summary) d.summary = "Analysis unavailable.";
+  if (!Array.isArray(d.techStack)) d.techStack = ["Unknown"];
+  if (!d.architecture) d.architecture = "Architecture not detected.";
+  if (!Array.isArray(d.architectureKeywords)) d.architectureKeywords = [];
+  if (!Array.isArray(d.entryPoints) || !d.entryPoints.length) {
+    d.entryPoints = [{ file: "index.js", reason: "Main entry point", priority: 1 }];
+  }
+  if (!Array.isArray(d.criticalFiles) || !d.criticalFiles.length) {
+    d.criticalFiles = [{ file: "main.js", explanation: "Core logic", keyPatterns: [] }];
+  }
+  if (!Array.isArray(d.gotchas) || !d.gotchas.length) {
+    d.gotchas = [{ title: "Review async handling", description: "Check for missing error boundaries.", severity: "medium" }];
+  }
+  if (!Array.isArray(d.readingOrder) || !d.readingOrder.length) {
+    d.readingOrder = [{ order: 1, file: "index.js", why: "Start here", timeEstimate: "5 min" }];
+  }
+  return d;
+}
 
+// ================== AI ANALYZE ==================
+app.post("/api/analyze", async (req, res) => {
+  if (!checkAPIKey(res)) return;
+
+  const { repoName, files } = req.body;
+  if (!repoName || !Array.isArray(files)) {
+    return res.status(400).json({ error: "repoName and files required" });
+  }
+
+  const parts = repoName.trim().split("/");
+  const owner = parts[0] || "";
+  const repo = parts[1] || "";
+  console.log(`🔍 Analyzing ${repoName} (${files.length} files)`);
+
+  // Truncate file content to avoid token limits
   const fileBlock = files
-    .map(f => `FILE: ${f.path}\n${f.content}`)
-    .join('\n\n');
+    .map((f) => `FILE: ${f.path}\n${(f.content || "").slice(0, 3000)}`)
+    .join("\n\n---\n\n");
 
-  const userPrompt = `
-You are a world-class senior software architect with 15+ years of experience.
+  const userPrompt = `You are a world-class senior software architect with 15+ years of experience.
 
-Analyze this GitHub repository and give a thorough, expert analysis that will help developers understand it quickly.
+Analyze this GitHub repository and return a comprehensive expert analysis.
 
 Repository: ${repoName}
 
@@ -75,115 +138,70 @@ STRICT RULES:
 - Return ONLY valid JSON, nothing else
 - No markdown fences, no explanations outside JSON
 - NEVER leave arrays empty
-- Be specific — mention actual file names and function names from the code above
+- Be specific — mention actual file names from the code above
 - Write summaries as if explaining to a smart junior developer
 
-Return EXACT JSON structure:
+Return EXACT JSON:
 {
-  "summary": "2-3 sentence plain-English explanation of what this project does and why it exists",
+  "summary": "2-3 sentence explanation of what this project does and why it exists",
   "techStack": ["list of actual technologies, frameworks, libraries detected"],
-  "architecture": "Clear explanation of the architectural pattern (e.g. MVC, microservices, monolith) and how the major pieces connect",
-  "architectureKeywords": ["e.g. REST API", "React SPA", "Express middleware"],
-
+  "architecture": "Clear explanation of the architecture pattern and how major pieces connect",
+  "architectureKeywords": ["e.g. REST API", "React SPA"],
   "entryPoints": [
-    { "file": "actual/path/from/files", "reason": "specific reason why this is the entry point", "priority": 1 }
+    { "file": "actual/path", "reason": "why this is entry point", "priority": 1 }
   ],
-
   "criticalFiles": [
-    { "file": "actual/path", "explanation": "what this file does and why it matters", "keyPatterns": ["actual patterns or functions used"] }
+    { "file": "actual/path", "explanation": "what it does and why", "keyPatterns": ["patterns used"] }
   ],
-
   "gotchas": [
-    { "title": "specific issue title", "description": "detailed explanation of the gotcha, what goes wrong and why", "severity": "low|medium|high" }
+    { "title": "issue title", "description": "detailed explanation", "severity": "low|medium|high" }
   ],
-
   "readingOrder": [
-    { "order": 1, "file": "actual/path", "why": "specific reason to read this file at this order", "timeEstimate": "X min" }
+    { "order": 1, "file": "actual/path", "why": "reason to read this first", "timeEstimate": "X min" }
   ]
 }
 
-MINIMUMS:
-- entryPoints: at least 3 real files
-- criticalFiles: at least 5 real files
-- gotchas: at least 4 real gotchas
-- readingOrder: at least 6 files in logical reading sequence
-`;
+MINIMUMS: entryPoints ≥ 3, criticalFiles ≥ 5, gotchas ≥ 4, readingOrder ≥ 6`;
 
-  // ── Run AI analysis AND GitHub stats fetch IN PARALLEL ──
-  const aiPromise = fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert software architect. Return ONLY valid JSON. No markdown fences. No preamble. Just the JSON object."
-        },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 4000,
-    })
-  });
+  const aiPromise = callOpenRouter(
+    [
+      { role: "system", content: "You are an expert software architect. Return ONLY valid JSON. No markdown. No preamble." },
+      { role: "user", content: userPrompt },
+    ],
+    { temperature: 0.3, max_tokens: 800 }
+  );
 
-  const githubPromise = (owner && repo)
-    ? fetchGitHubData(owner, repo).catch(err => {
-        console.error("⚠️ GitHub stats fetch failed (non-fatal):", err.message);
-        return null;
-      })
-    : Promise.resolve(null);
+  const githubPromise =
+    owner && repo
+      ? fetchGitHubData(owner, repo).catch((err) => {
+          console.warn("⚠️ GitHub stats non-fatal:", err.message);
+          return null;
+        })
+      : Promise.resolve(null);
 
   try {
-    // Both run at the same time — AI is slow, GitHub is fast
     const [aiResponse, githubData] = await Promise.all([aiPromise, githubPromise]);
-
-    console.log(`✅ GitHub stats: ${githubData ? 'OK' : 'null'}`);
+    console.log(`✅ GitHub stats: ${githubData ? "OK" : "null"}`);
 
     const data = await aiResponse.json();
+
+    // Detect OpenRouter errors
+    if (data.error) {
+      throw new Error(data.error.message || JSON.stringify(data.error));
+    }
+
     const raw = data.choices?.[0]?.message?.content || "{}";
     const clean = raw.replace(/```json|```/g, "").trim();
 
     let parsed;
-    try { parsed = JSON.parse(clean); }
-    catch { parsed = {}; }
-
-    function ensureData(d) {
-      if (!d || typeof d !== "object") d = {};
-      if (!d.summary) d.summary = "AI analysis unavailable.";
-      if (!Array.isArray(d.techStack)) d.techStack = ["Unknown"];
-      if (!d.architecture) d.architecture = "Architecture not available.";
-      if (!Array.isArray(d.architectureKeywords)) d.architectureKeywords = ["General"];
-      if (!Array.isArray(d.entryPoints) || d.entryPoints.length === 0) {
-        d.entryPoints = [
-          { file: "index.js", reason: "Main entry point", priority: 1 },
-          { file: "app.js", reason: "Application setup", priority: 2 },
-          { file: "server.js", reason: "Server initialization", priority: 3 }
-        ];
-      }
-      if (!Array.isArray(d.criticalFiles) || d.criticalFiles.length === 0) {
-        d.criticalFiles = [
-          { file: "main.js", explanation: "Core application logic", keyPatterns: ["initialization"] }
-        ];
-      }
-      if (!Array.isArray(d.gotchas) || d.gotchas.length === 0) {
-        d.gotchas = [
-          { title: "Missing error handling", description: "Several async functions lack proper error boundaries.", severity: "medium" }
-        ];
-      }
-      if (!Array.isArray(d.readingOrder) || d.readingOrder.length === 0) {
-        d.readingOrder = [
-          { order: 1, file: "index.js", why: "Start here to understand initialization", timeEstimate: "5 min" }
-        ];
-      }
-      return d;
+    try {
+      parsed = JSON.parse(clean);
+    } catch {
+      console.warn("⚠️ JSON parse failed, using fallback. Raw:", clean.slice(0, 200));
+      parsed = {};
     }
 
-    res.json({ ...ensureData(parsed), githubData });
-
+    res.json({ ...ensureAnalysis(parsed), githubData });
   } catch (err) {
     console.error("❌ /api/analyze error:", err.message);
     res.status(500).json({ error: err.message });
@@ -191,105 +209,82 @@ MINIMUMS:
 });
 
 // ================== AI CHAT ==================
-app.post('/api/chat', async (req, res) => {
-  const { question, history = [], context } = req.body;
+app.post("/api/chat", async (req, res) => {
+  if (!checkAPIKey(res)) return;
 
+  const { question, history = [], context } = req.body;
   if (!question || !context) {
-    return res.status(400).json({ error: 'question and context required' });
+    return res.status(400).json({ error: "question and context required" });
   }
 
-  const fileContext = context.files
+  const fileContext = (context.files || [])
     .slice(0, 15)
-    .map(f => `📄 ${f.path} (${f.lines} lines, ${f.language})`)
-    .join('\n');
+    .map((f) => `📄 ${f.path} (${f.lines} lines, ${f.language})`)
+    .join("\n");
 
-  const criticalFilesContext = context.analysis.criticalFiles
-    ? context.analysis.criticalFiles.map(cf => `• ${cf.file}: ${cf.explanation}`).join('\n')
-    : '';
+  const criticalCtx = (context.analysis?.criticalFiles || [])
+    .map((cf) => `• ${cf.file}: ${cf.explanation}`)
+    .join("\n");
 
-  const gotchasContext = context.analysis.gotchas
-    ? context.analysis.gotchas.map(g => `• [${g.severity.toUpperCase()}] ${g.title}: ${g.description}`).join('\n')
-    : '';
+  const gotchasCtx = (context.analysis?.gotchas || [])
+    .map((g) => `• [${(g.severity||'').toUpperCase()}] ${g.title}: ${g.description}`)
+    .join("\n");
 
-  const systemPrompt = `You are RepoXray AI — the world's most knowledgeable and friendly codebase guide.
+  const systemPrompt = `You are RepoXray AI — the world's most knowledgeable codebase guide.
 
-You are like a brilliant senior engineer who has spent hours reading this exact repository and now sits beside the developer, ready to explain anything clearly, deeply, and conversationally.
+You are like a brilliant senior engineer who has spent hours reading this repository.
 
 ═══════════════════════════════════════════════
 REPOSITORY: ${context.repoName}
 ═══════════════════════════════════════════════
 
 📋 SUMMARY:
-${context.analysis.summary}
+${context.analysis?.summary || 'Not available'}
 
 🛠️ TECH STACK:
-${context.analysis.techStack.join(' · ')}
+${(context.analysis?.techStack || []).join(" · ")}
 
 🏗️ ARCHITECTURE:
-${context.analysis.architecture}
+${context.analysis?.architecture || 'Not available'}
 
 📂 KEY FILES:
 ${fileContext}
 
 🔑 CRITICAL FILES:
-${criticalFilesContext}
+${criticalCtx}
 
-⚠️ GOTCHAS TO KNOW:
-${gotchasContext}
+⚠️ GOTCHAS:
+${gotchasCtx}
 
 ═══════════════════════════════════════════════
 HOW TO RESPOND:
 ═══════════════════════════════════════════════
-
-PERSONALITY:
-- Be warm, sharp, and direct — like a brilliant tech mentor
-- Never be robotic or generic — always be specific to THIS repo
-- Show genuine enthusiasm when explaining elegant code patterns
-- Use "we", "you'll notice", "the interesting thing here is..." naturally
-
-FORMAT:
-- Start with a 1-sentence direct answer to the question
-- Use structured markdown: headers, bullets, code blocks where helpful
-- Mention ACTUAL file names from this repo (e.g. \`src/components/Hero.tsx\`)
-- Give concrete examples from the actual codebase when possible
-- Code snippets should be in proper \`\`\`language blocks
-
-DEPTH:
-- For simple questions: 150-250 words, clear and punchy
-- For architecture/deep questions: 300-500 words, structured with headers
-- For advanced questions: go deep, don't shy away from complexity
-
-NEVER:
-- Give a generic answer that could apply to any codebase
-- Say "I don't have access to the full code" — you DO have the analysis above
-- Use filler phrases like "Great question!" or "Certainly!"
-- Repeat the question back to the user`;
+- Be warm, sharp, specific to THIS repo
+- Start with a 1-sentence direct answer
+- Use markdown: headers, bullets, code blocks
+- Mention ACTUAL file names from this repo
+- For simple questions: 150-250 words
+- For architecture questions: 300-500 words
+- NEVER give generic answers
+- NEVER say "I don't have access to the full code"`;
 
   const messages = [
     { role: "system", content: systemPrompt },
-    ...history.slice(-8).map(m => ({ role: m.role, content: m.content })),
-    { role: "user", content: question }
+    ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: question },
   ];
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o",
-        messages,
-        stream: true,
-        temperature: 0.6,
-        max_tokens: 1200,
-      })
+    const response = await callOpenRouter(messages, {
+      stream: true,
+      temperature: 0.6,
+      max_tokens: 1200,
     });
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -297,16 +292,26 @@ NEVER:
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      res.write(decoder.decode(value));
+      res.write(decoder.decode(value, { stream: true }));
     }
 
     res.end();
-
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ /api/chat error:", err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message });
+    } else {
+      res.end();
+    }
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 RepoXray server at http://localhost:${PORT}`);
+  console.log(`\n🚀 RepoXray server at http://localhost:${PORT}`);
+  if (!OPENROUTER_KEY) {
+    console.warn("⚠️  WARNING: OPENROUTER_API_KEY is not set! AI features will fail.");
+    console.warn("   Add it to backend/.env");
+  } else {
+    console.log(`✅ AI ready — model: ${MODEL}`);
+  }
 });

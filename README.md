@@ -1,52 +1,108 @@
-RepoXray
-Understand Any GitHub Repository in Seconds
+# RepoXray — AI Codebase Intelligence
 
-RepoXray is an AI-powered tool that analyzes GitHub repositories and presents a clear, structured overview of the project — making it easier for developers, beginners, and recruiters to understand codebases quickly.
+> Understand any GitHub repository in 60 seconds.  
+> AI-powered dependency graphs, architecture analysis, and live Q&A.
 
-📌 Features
+---
 
-✨ Instant Repo Analysis
-Paste any GitHub repo link and get a full breakdown.
+## 🚀 Quick Start
 
-📂 File Structure Visualization
-View all files and folders in an organized format.
+### 1. Clone / unzip the project
 
-🤖 AI-Powered Insights
+### 2. Set up environment variables
 
-Summary of repository
-Purpose of project
-Key technologies used
+```bash
+cp backend/.env.example backend/.env
+```
 
-📊 Smart File Ranking
-Highlights important files for better understanding.
+Edit `backend/.env`:
+```
+OPENROUTER_API_KEY=sk-or-v1-...    # Required — get at openrouter.ai
+GITHUB_TOKEN=github_pat_...        # Optional — avoids rate limits
+PORT=4000
+```
 
-📖 Code Viewer
-Click on any file to view its code instantly.
+Get your OpenRouter key at: https://openrouter.ai/keys
 
-🧠 Simplified Explanation
-AI explains complex code in an easy-to-understand way.
+### 3. Install & start backend
 
-🛠️ Tech Stack
-⚛️ Frontend: React.js
-🎨 UI/UX: Tailwind CSS + Framer Motion
-🧠 AI Integration: OpenAI API
-🔗 GitHub API for fetching repo data
-⚙️ How It Works
-Paste a GitHub repository link
-RepoXray fetches all files and metadata
-AI analyzes the repository
-Dashboard displays:
-Repo summary
-File ranking
-Code insights
-# Clone the repository
-git clone https://github.com/your-username/RepoXray.git
-
-# Navigate to project folder
-cd RepoXray
-
-# Install dependencies
+```bash
+cd backend
 npm install
-
-# Start development server
 npm start
+# → Server at http://localhost:4000
+```
+
+### 4. Install & start frontend
+
+In a new terminal:
+```bash
+npm install
+npm run dev
+# → App at http://localhost:5173
+```
+
+### 5. Open the app
+
+Navigate to **http://localhost:5173** and paste any GitHub repo URL.
+
+---
+
+## 🐛 Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| "Cannot reach backend at localhost:4000" | Run `cd backend && npm start` |
+| "AI API key not configured" | Add `OPENROUTER_API_KEY` to `backend/.env` |
+| "Invalid API key" | Check your key at openrouter.ai/keys |
+| GitHub rate limit errors | Add `GITHUB_TOKEN` to `backend/.env` |
+| Particle animation not showing | Reload — canvas needs a frame to initialize |
+
+---
+
+## ✨ Features
+
+- **🧠 AI Analysis** — GPT-4o powered architecture analysis via OpenRouter
+- **🕸️ Dependency Graph** — Interactive visual file dependency graph
+- **💬 Live Q&A** — Streaming chat about any codebase
+- **✅ Onboarding Checklist** — AI-generated ramp-up guide
+- **📊 Repo Stats** — Stars, commits, contributors, language breakdown
+- **⬡ Particle Modes** — Neural / Galaxy / Flow background animations
+- **🌙 Dark / Light themes** — Full theme support
+
+---
+
+## 🔧 Architecture
+
+```
+RepoXray/
+├── src/                    # React frontend (Vite + TypeScript)
+│   ├── App.tsx             # Root — canvas, neural SVGs, routing
+│   ├── particle-bg.js      # React hook for canvas particle system
+│   ├── api/
+│   │   ├── github.ts       # GitHub REST API client
+│   │   └── openai.ts       # OpenRouter API client (analyze + chat)
+│   ├── components/
+│   │   ├── Hero.tsx        # Landing page
+│   │   ├── Dashboard.tsx   # Main analysis dashboard (tabs)
+│   │   ├── ChatPanel.tsx   # Streaming chat UI
+│   │   ├── TopBar.tsx      # Nav + particle mode switcher
+│   │   └── ...
+│   └── hooks/
+│       ├── useRepoAnalysis.ts  # State machine for fetch + analyze
+│       └── useChat.ts          # Streaming chat state
+└── backend/                # Express API server
+    ├── server.js           # Routes: /api/analyze, /api/chat, /api/github-stats
+    └── githubData.js       # GitHub stats fetcher
+```
+
+---
+
+## 🔑 API Keys
+
+| Key | Required | Where to get |
+|-----|----------|-------------|
+| `OPENROUTER_API_KEY` | ✅ Yes | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `GITHUB_TOKEN` | Optional | [github.com/settings/tokens](https://github.com/settings/tokens) |
+
+The app uses **`openai/gpt-4o`** via OpenRouter for all AI features.

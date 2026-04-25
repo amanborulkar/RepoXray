@@ -153,6 +153,21 @@ body {
 @keyframes bgPulse    { 0% { opacity:0.7; } 100% { opacity:1; } }
 @keyframes wobble     { 0%,100% { transform:rotate(0deg); } 25% { transform:rotate(-3deg); } 75% { transform:rotate(3deg); } }
 
+/* ── Neural brain keyframes ── */
+@keyframes neuronPulse {
+  0%, 100% { opacity: 0.28; }
+  45%       { opacity: 1;    }
+  50%       { opacity: 0.82; }
+}
+@keyframes neuronPulseFaint {
+  0%, 100% { opacity: 0.12; }
+  50%       { opacity: 0.52; }
+}
+@keyframes synapseFlow {
+  0%   { stroke-dashoffset: 240; }
+  100% { stroke-dashoffset: -14; }
+}
+
 /* ── Utility animation classes ── */
 .fu  { animation: fadeUp    0.6s  cubic-bezier(0.16,1,0.3,1) both; }
 .fi  { animation: fadeIn    0.4s  ease both; }
@@ -544,6 +559,49 @@ code { background:rgba(255,255,255,0.06); border:1px solid var(--border); border
 .contributor-avatar:hover { transform:scale(1.15) translateY(-2px); border-color:var(--brand); box-shadow:0 0 12px rgba(16,185,129,0.4); }
 
 /* ═══════════════════════════════════════════════════════════
+   NEURAL BRAIN DECORATIONS
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Wrapper elements ── */
+.brain-neural-left {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: 160px;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.brain-neural-topright {
+  position: fixed;
+  right: 0; top: 0;
+  width: 300px;
+  height: 220px;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* ── Shared SVG animation classes ── */
+.brain-neural-left svg,
+.brain-neural-topright svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.bn-neuron {
+  animation: neuronPulse 3.5s ease-in-out infinite;
+}
+.bn-neuron-faint {
+  animation: neuronPulseFaint 4s ease-in-out infinite;
+}
+.bn-synapse {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 11 240;
+  animation: synapseFlow 4.5s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
@@ -551,3 +609,61 @@ code { background:rgba(255,255,255,0.06); border:1px solid var(--border); border
   .search-bar { padding:15px 110px 15px 44px; font-size:14px; }
   .file-viewer { width:98%; max-height:92vh; border-radius:12px; }
 }
+
+@media (max-width: 640px) {
+  .brain-neural-left,
+  .brain-neural-topright { display: none; }
+}
+/* ═══════════════════════════════════════════════════════════
+   PARTICLE CANVAS BACKGROUND
+   ═══════════════════════════════════════════════════════════ */
+#particle-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NEURAL BRAIN — ALWAYS VISIBLE (hero + dashboard)
+   ═══════════════════════════════════════════════════════════ */
+.brain-neural-left,
+.brain-neural-topright {
+  /* Slightly lower opacity on dashboard so content is easier to read */
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+/* Subtle scanline overlay for depth */
+.hero-scanline {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(16,185,129,0.015) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 1;
+  animation: scanlineScroll 20s linear infinite;
+}
+@keyframes scanlineScroll {
+  0%   { background-position: 0 0; }
+  100% { background-position: 0 100vh; }
+}
+
+/* ── Particle mode buttons ── */
+.particle-btn {
+  padding: 4px 12px; border-radius: 8px; font-size: 11px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  color: var(--muted2); transition: all 0.2s; font-family: 'Geist Mono', monospace;
+}
+.particle-btn.active,
+.particle-btn:hover {
+  background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3);
+  color: #34d399;
+}
+
