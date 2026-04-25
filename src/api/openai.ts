@@ -2,8 +2,6 @@
 
 import { RepoFile, ClaudeAnalysis, ChatMessage } from '../types';
 
-const BASE_URL = 'http://localhost:4000';
-
 // ── Analyze Repo ──────────────────────────────────────────
 export async function analyzeRepo(
   repoName: string,
@@ -12,14 +10,17 @@ export async function analyzeRepo(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/api/analyze`, {
+    // BUG FIX: use relative path so Vite proxy routes to backend.
+    // Previously hardcoded http://localhost:4000 which bypassed the proxy
+    // and broke in every non-localhost environment (Vercel, Railway, etc.).
+    res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repoName, files }),
     });
   } catch (networkErr) {
     throw new Error(
-      'Cannot reach backend at localhost:4000. ' +
+      'Cannot reach the backend. ' +
       'Make sure to run: cd backend && npm start'
     );
   }
@@ -52,14 +53,14 @@ export async function streamChat(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/api/chat`, {
+    res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, history, context }),
     });
   } catch (networkErr) {
     throw new Error(
-      'Cannot reach backend at localhost:4000. ' +
+      'Cannot reach the backend. ' +
       'Run: cd backend && npm start'
     );
   }

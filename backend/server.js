@@ -19,13 +19,20 @@ app.get("/api/health", (req, res) => res.json({ ok: true, model: "openai/gpt-4o"
 // ── GitHub proxy ──
 app.get("/api/github/*", async (req, res) => {
   const path = req.params[0];
-  const url = `https://api.github.com/${path}`;
+  // BUG FIX: forward query string (e.g. ?recursive=1) — req.params[0] only has
+  // the path segment, stripping everything after '?'. Without this fix the
+  // recursive tree API call returns only the root level and no subdirectory
+  // files are ever analyzed.
+  const qs = new URLSearchParams(req.query).toString();
+  const url = `https://api.github.com/${path}${qs ? `?${qs}` : ""}`;
   try {
     const headers = { "Accept": "application/vnd.github.v3+json", "User-Agent": "RepoXray/1.0" };
     if (process.env.GITHUB_TOKEN) headers["Authorization"] = `token ${process.env.GITHUB_TOKEN}`;
     const response = await fetch(url, { headers });
     const data = await response.json();
-    res.json(data);
+    // BUG FIX: mirror GitHub's actual status code so the frontend's 401/403/404
+    // checks in ghFetch() work correctly. Previously always returned 200.
+    res.status(response.status).json(data);
   } catch (err) {
     res.status(500).json({ error: "GitHub fetch failed", details: err.message });
   }
@@ -168,7 +175,7 @@ MINIMUMS: entryPoints ≥ 3, criticalFiles ≥ 5, gotchas ≥ 4, readingOrder �
       { role: "system", content: "You are an expert software architect. Return ONLY valid JSON. No markdown. No preamble." },
       { role: "user", content: userPrompt },
     ],
-    { temperature: 0.3, max_tokens: 800 }
+    { temperature: 0.3, max_tokens: 650 }
   );
 
   const githubPromise =
@@ -278,7 +285,7 @@ HOW TO RESPOND:
     const response = await callOpenRouter(messages, {
       stream: true,
       temperature: 0.6,
-      max_tokens: 1200,
+      max_tokens: 400,
     });
 
     res.setHeader("Content-Type", "text/event-stream");

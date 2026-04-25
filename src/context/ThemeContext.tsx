@@ -14,7 +14,12 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem("repoxray-theme") as Theme) || "dark";
+    const saved = (localStorage.getItem("repoxray-theme") as Theme) || "dark";
+    // Set synchronously — before first render — so CSS vars resolve on initial paint
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+    return saved;
   });
 
   useEffect(() => {

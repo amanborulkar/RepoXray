@@ -58,11 +58,17 @@ class Particle {
   draw(ctx) {
     const a=.5+this.pulse*.5;
     ctx.save(); ctx.globalAlpha=a;
-    ctx.shadowColor=this.col; ctx.shadowBlur=this.r*6;
+    // Only apply expensive shadowBlur on larger particles
+    if (this.r > 2) {
+      ctx.shadowColor=this.col; ctx.shadowBlur=this.r*4;
+    }
     ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
     ctx.fillStyle=this.col; ctx.fill();
-    ctx.globalAlpha=a*.22; ctx.shadowBlur=this.r*18;
-    ctx.beginPath(); ctx.arc(this.x,this.y,this.r*2.8,0,Math.PI*2); ctx.fill();
+    // Skip secondary glow pass on small particles
+    if (this.r > 1.8) {
+      ctx.globalAlpha=a*.15; ctx.shadowBlur=this.r*10;
+      ctx.beginPath(); ctx.arc(this.x,this.y,this.r*2.2,0,Math.PI*2); ctx.fill();
+    }
     ctx.restore();
   }
 }

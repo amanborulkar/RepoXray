@@ -27,8 +27,6 @@ interface Props {
   onBack: () => void;
 }
 
-const BASE_URL = 'http://localhost:4000';
-
 export default function Dashboard({ repoInfo, files, analysis, githubData: initialGithubData, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('overview');
   const [drawerFile, setDrawer] = useState<RepoFile | null>(null);
@@ -49,7 +47,7 @@ export default function Dashboard({ repoInfo, files, analysis, githubData: initi
       setStatsError('');
       try {
         const res = await fetch(
-          `${BASE_URL}/api/github-stats/${repoInfo.owner}/${repoInfo.repo}`
+          `/api/github-stats/${repoInfo.owner}/${repoInfo.repo}`
         );
         const json = await res.json();
         if (json.githubData) {
@@ -118,10 +116,8 @@ export default function Dashboard({ repoInfo, files, analysis, githubData: initi
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
           {TABS.map(t => (
-            <motion.button
+            <button
               key={t.key}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
               onClick={() => setTab(t.key)}
               style={{
                 padding: '8px 16px',
@@ -136,11 +132,16 @@ export default function Dashboard({ repoInfo, files, analysis, githubData: initi
                 fontWeight: tab === t.key ? 600 : 400,
                 fontFamily: "'Geist', sans-serif",
                 boxShadow: tab === t.key ? '0 0 18px rgba(16,185,129,0.25)' : 'none',
-                transition: 'all 0.2s',
+                transition: 'all 0.18s cubic-bezier(0.16,1,0.3,1)',
+                transform: 'translateZ(0)',
               }}
+              onMouseEnter={e => { if (tab !== t.key) (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px) translateZ(0)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateZ(0)'; }}
+              onMouseDown={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(1px) translateZ(0)'; }}
+              onMouseUp={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateZ(0)'; }}
             >
               {t.label}
-            </motion.button>
+            </button>
           ))}
         </div>
 

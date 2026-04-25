@@ -1,108 +1,157 @@
 # RepoXray — AI Codebase Intelligence
 
-> Understand any GitHub repository in 60 seconds.  
-> AI-powered dependency graphs, architecture analysis, and live Q&A.
+Understand any GitHub repository in minutes through automated analysis, dependency visualization, and contextual Q&A.
 
 ---
 
-## 🚀 Quick Start
+## Overview
 
-### 1. Clone / unzip the project
+RepoXray is an AI-powered developer tool that analyzes codebases and presents structured insights, including architecture, dependencies, and onboarding guidance. It also provides an interactive chat interface to explore repositories in depth.
 
-### 2. Set up environment variables
+---
+
+## Features
+
+* AI-driven architecture and code analysis (via GPT-4o)
+* Interactive dependency graph visualization
+* Context-aware chat for repository exploration
+* Repository statistics (stars, commits, contributors, languages)
+* Automated onboarding and reading guidance
+* Theme support (dark/light)
+* Responsive UI with modern design patterns
+
+---
+
+## Getting Started
+
+### 1. Clone the repository
+
+```bash
+git clone <your-repo-url>
+cd RepoXray
+```
+
+---
+
+### 2. Configure environment variables
 
 ```bash
 cp backend/.env.example backend/.env
 ```
 
 Edit `backend/.env`:
+
 ```
-OPENROUTER_API_KEY=sk-or-v1-...    # Required — get at openrouter.ai
-GITHUB_TOKEN=github_pat_...        # Optional — avoids rate limits
+OPENROUTER_API_KEY=your_api_key_here
+GITHUB_TOKEN=your_github_token_here
 PORT=4000
 ```
 
-Get your OpenRouter key at: https://openrouter.ai/keys
+* `OPENROUTER_API_KEY` (required): Obtain from https://openrouter.ai/keys
+* `GITHUB_TOKEN` (optional): Helps avoid GitHub API rate limits
 
-### 3. Install & start backend
+---
+
+### 3. Start the backend server
 
 ```bash
 cd backend
 npm install
 npm start
-# → Server at http://localhost:4000
 ```
 
-### 4. Install & start frontend
+Server runs at: http://localhost:4000
 
-In a new terminal:
+---
+
+### 4. Start the frontend
+
 ```bash
 npm install
 npm run dev
-# → App at http://localhost:5173
 ```
 
-### 5. Open the app
-
-Navigate to **http://localhost:5173** and paste any GitHub repo URL.
+Frontend runs at: http://localhost:5173
 
 ---
 
-## 🐛 Troubleshooting
+### 5. Use the application
 
-| Problem | Fix |
-|---------|-----|
-| "Cannot reach backend at localhost:4000" | Run `cd backend && npm start` |
-| "AI API key not configured" | Add `OPENROUTER_API_KEY` to `backend/.env` |
-| "Invalid API key" | Check your key at openrouter.ai/keys |
-| GitHub rate limit errors | Add `GITHUB_TOKEN` to `backend/.env` |
-| Particle animation not showing | Reload — canvas needs a frame to initialize |
+Open http://localhost:5173 and enter any GitHub repository URL.
 
 ---
 
-## ✨ Features
-
-- **🧠 AI Analysis** — GPT-4o powered architecture analysis via OpenRouter
-- **🕸️ Dependency Graph** — Interactive visual file dependency graph
-- **💬 Live Q&A** — Streaming chat about any codebase
-- **✅ Onboarding Checklist** — AI-generated ramp-up guide
-- **📊 Repo Stats** — Stars, commits, contributors, language breakdown
-- **⬡ Particle Modes** — Neural / Galaxy / Flow background animations
-- **🌙 Dark / Light themes** — Full theme support
-
----
-
-## 🔧 Architecture
+## Project Structure
 
 ```
 RepoXray/
-├── src/                    # React frontend (Vite + TypeScript)
-│   ├── App.tsx             # Root — canvas, neural SVGs, routing
-│   ├── particle-bg.js      # React hook for canvas particle system
-│   ├── api/
-│   │   ├── github.ts       # GitHub REST API client
-│   │   └── openai.ts       # OpenRouter API client (analyze + chat)
-│   ├── components/
-│   │   ├── Hero.tsx        # Landing page
-│   │   ├── Dashboard.tsx   # Main analysis dashboard (tabs)
-│   │   ├── ChatPanel.tsx   # Streaming chat UI
-│   │   ├── TopBar.tsx      # Nav + particle mode switcher
-│   │   └── ...
-│   └── hooks/
-│       ├── useRepoAnalysis.ts  # State machine for fetch + analyze
-│       └── useChat.ts          # Streaming chat state
-└── backend/                # Express API server
-    ├── server.js           # Routes: /api/analyze, /api/chat, /api/github-stats
-    └── githubData.js       # GitHub stats fetcher
+├── src/                    # Frontend (React + Vite + TypeScript)
+│   ├── api/                # API integration layer
+│   ├── components/         # UI components
+│   ├── hooks/              # Custom React hooks
+│   └── App.tsx             # Application root
+│
+└── backend/                # Backend (Node.js + Express)
+    ├── server.js           # API routes
+    └── githubData.js       # GitHub data integration
 ```
 
 ---
 
-## 🔑 API Keys
+## Troubleshooting
 
-| Key | Required | Where to get |
-|-----|----------|-------------|
-| `OPENROUTER_API_KEY` | ✅ Yes | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `GITHUB_TOKEN` | Optional | [github.com/settings/tokens](https://github.com/settings/tokens) |
+| Issue                      | Resolution                                  |
+| -------------------------- | ------------------------------------------- |
+| Backend not reachable      | Ensure `npm start` is running in `/backend` |
+| Missing API key            | Add `OPENROUTER_API_KEY` to `.env`          |
+| Invalid API key            | Regenerate key from OpenRouter              |
+| GitHub rate limit exceeded | Add `GITHUB_TOKEN`                          |
+| UI not rendering properly  | Refresh the application                     |
 
-The app uses **`openai/gpt-4o`** via OpenRouter for all AI features.
+---
+
+## API Keys
+
+| Variable           | Required | Description                       |
+| ------------------ | -------- | --------------------------------- |
+| OPENROUTER_API_KEY | Yes      | Used for AI-powered analysis      |
+| GITHUB_TOKEN       | No       | Prevents GitHub API rate limiting |
+
+---
+
+## Architecture Summary
+
+1. Fetch repository data using GitHub API
+2. Process code using AI via OpenRouter
+3. Generate structured analysis output
+4. Render insights and enable interactive exploration
+
+---
+
+## Technology Stack
+
+* React (Vite + TypeScript)
+* Node.js with Express
+* OpenRouter API (GPT-4o)
+* GitHub REST API
+
+---
+
+## Future Enhancements
+
+* In-repository code search
+* Test coverage insights
+* Multi-model AI support
+* Repository comparison tools
+
+---
+
+## License
+
+Add your preferred license here.
+
+---
+
+## Contribution
+
+Contributions are welcome. Please open an issue or submit a pull request.

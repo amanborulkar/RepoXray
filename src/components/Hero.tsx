@@ -74,7 +74,7 @@ export default function Hero({ onAnalyze, error }: Props) {
       <nav style={{
         height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 32px', borderBottom: '1px solid var(--border)',
-        background: 'rgba(8,8,9,0.82)', backdropFilter: 'blur(24px)',
+        background: 'var(--topbar-bg)', backdropFilter: 'blur(24px)',
         position: 'sticky', top: 0, zIndex: 50,
       }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontWeight: 700, fontSize: 18, letterSpacing: '-0.5px' }}>

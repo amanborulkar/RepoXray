@@ -110,19 +110,34 @@ export async function fetchSelectedFiles(
   onProgress?: (done: number, total: number) => void
 ): Promise<RepoFile[]> {
   const results: RepoFile[] = [];
-  for (let i = 0; i < paths.length; i++) {
-    const path = paths[i];
-    const content = await fetchFileContent(owner, repo, path);
-    if (content) {
-      results.push({
-        path,
-        content,
-        language: detectLanguage(path),
-        lines: content.split('\n').length,
-        size: content.length,
-      });
-    }
-    onProgress?.(i + 1, paths.length);
+  // BUG FIX: was a sequential for-loop — one file fetched at a time.
+  // For 15 files that meant ~15 serial round trips (~15s on a slow connection).
+  // Now we fetch in parallel batches of 5, reducing typical wait to ~3s.
+  const BATCH_SIZE = 5;
+
+  for (let i = 0; i < paths.length; i += BATCH_SIZE) {
+    const batch = paths.slice(i, i + BATCH_SIZE);
+
+    const settled = await Promise.allSettled(
+      batch.map(path => fetchFileContent(owner, repo, path))
+    );
+
+    settled.forEach((result, idx) => {
+      const path = batch[idx];
+      const content = result.status === 'fulfilled' ? result.value : '';
+      if (content) {
+        results.push({
+          path,
+          content,
+          language: detectLanguage(path),
+          lines: content.split('\n').length,
+          size: content.length,
+        });
+      }
+    });
+
+    onProgress?.(Math.min(i + BATCH_SIZE, paths.length), paths.length);
   }
+
   return results;
 }
