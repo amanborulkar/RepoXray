@@ -1,9 +1,3 @@
-// src/api/github.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// GitHub calls now go through /api/github/* on our backend.
-// The GitHub token is added by the backend — no token in the frontend.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { RepoInfo, TreeItem, RepoFile } from '../types';
 
 const SKIP_DIRS = new Set([
@@ -18,7 +12,6 @@ const SKIP_EXTS = new Set([
   '.tar', '.gz', '.lock', '.sum', '.toml', '.snap',
 ]);
 
-// Calls /api/github/<path> — backend adds the Authorization header
 async function ghFetch<T>(path: string): Promise<T> {
   const res = await fetch(`/api/github/${path}`);
   if (res.status === 401) throw new Error('401: Bad GitHub token');
@@ -110,10 +103,7 @@ export async function fetchSelectedFiles(
   onProgress?: (done: number, total: number) => void
 ): Promise<RepoFile[]> {
   const results: RepoFile[] = [];
-  // BUG FIX: was a sequential for-loop — one file fetched at a time.
-  // For 15 files that meant ~15 serial round trips (~15s on a slow connection).
-  // Now we fetch in parallel batches of 5, reducing typical wait to ~3s.
-  const BATCH_SIZE = 5;
+const BATCH_SIZE = 5;
 
   for (let i = 0; i < paths.length; i += BATCH_SIZE) {
     const batch = paths.slice(i, i + BATCH_SIZE);

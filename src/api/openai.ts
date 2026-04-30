@@ -1,5 +1,3 @@
-// src/api/openai.ts — Fixed API client with robust error handling
-
 import { RepoFile, ClaudeAnalysis, ChatMessage } from '../types';
 
 // ── Analyze Repo ──────────────────────────────────────────
@@ -10,9 +8,7 @@ export async function analyzeRepo(
 
   let res: Response;
   try {
-    // BUG FIX: use relative path so Vite proxy routes to backend.
-    // Previously hardcoded http://localhost:4000 which bypassed the proxy
-    // and broke in every non-localhost environment (Vercel, Railway, etc.).
+
     res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

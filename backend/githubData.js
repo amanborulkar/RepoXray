@@ -1,16 +1,3 @@
-// githubData.js
-// ─────────────────────────────────────────────────────────────────────────────
-// DROP THIS FILE into your backend folder (same level as server.js / index.js)
-// Then in server.js:
-//   const { fetchGitHubData } = require('./githubData');
-//
-// In your route handler:
-//   const githubData = await fetchGitHubData(owner, repo);
-//   res.json({ githubData, ...otherStuff });
-//
-// Then on the frontend, pass it to <RepoStats data={githubData} />
-// ─────────────────────────────────────────────────────────────────────────────
-
 export async function fetchGitHubData(owner, repo) {
   const token = process.env.GITHUB_TOKEN;
   const h = {
@@ -19,7 +6,6 @@ export async function fetchGitHubData(owner, repo) {
   };
   const base = `https://api.github.com/repos/${owner}/${repo}`;
 
-  // Fire all requests in parallel — use allSettled so one failure doesn't kill rest
   const results = await Promise.allSettled([
     fetch(base, { headers: h }),                                               // 0 repo info
     fetch(`${base}/contributors?per_page=12`, { headers: h }),                 // 1 contributors
